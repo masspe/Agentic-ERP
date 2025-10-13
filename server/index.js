@@ -1,8 +1,17 @@
 import express from 'express';
 import cors from 'cors';
-import { PrismaClient } from '@prisma/client';
+import { MongoClient, ObjectId } from 'mongodb';
 
-const prisma = new PrismaClient();
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/agentic_erp';
+
+const mongoClient = new MongoClient(MONGO_URI, {
+  serverSelectionTimeoutMS: 5000
+});
+
+let database;
+
+const resolveDatabaseName = () => process.env.MONGO_DB_NAME || mongoClient.options?.dbName || 'agentic_erp';
+
 const app = express();
 const PORT = process.env.PORT || 4000;
 
@@ -42,14 +51,47 @@ const ENTITY_TYPES = [
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
 
+const connectToDatabase = async () => {
+  if (!database) {
+    await mongoClient.connect();
+    database = mongoClient.db(resolveDatabaseName());
+  }
+
+  return database;
+};
+
+const getCollection = (name) => {
+  if (!database) {
+    throw new Error('Database connection has not been initialised');
+  }
+
+  return database.collection(name);
+};
+
+const entityCollection = () => getCollection('entities');
+const conversationCollection = () => getCollection('conversations');
+const messageCollection = () => getCollection('messages');
+
+const toObjectId = (value) => {
+  if (!value || !ObjectId.isValid(value)) {
+    return null;
+  }
+
+  try {
+    return new ObjectId(value);
+  } catch (_error) {
+    return null;
+  }
+};
+
 const mapRecordToEntity = (record) => {
   if (!record) return null;
   const payload = typeof record.data === 'object' && record.data !== null ? { ...record.data } : {};
-  const createdAt = payload.created_date || record.createdAt?.toISOString();
-  const updatedAt = payload.updated_date || record.updatedAt?.toISOString();
+  const createdAt = payload.created_date || record.createdAt?.toISOString?.();
+  const updatedAt = payload.updated_date || record.updatedAt?.toISOString?.();
 
   return {
-    id: record.id,
+    id: record._id?.toString?.() || record.id,
     ...payload,
     created_date: createdAt,
     updated_date: updatedAt
@@ -118,12 +160,12 @@ app.get('/api/entities/:type', async (req, res) => {
     const { sort, limit = 100, offset = 0 } = req.query;
     const { field, direction } = parseSort(sort);
 
-    const records = await prisma.entityRecord.findMany({
-      where: { type },
-      orderBy: { [field]: direction },
-      skip: Number(offset) || 0,
-      take: Math.min(Number(limit) || 100, 500)
-    });
+    const records = await entityCollection()
+      .find({ type })
+      .sort({ [field]: direction === 'asc' ? 1 : -1 })
+      .skip(Number(offset) || 0)
+      .limit(Math.min(Number(limit) || 100, 500))
+      .toArray();
 
     res.json(records.map(mapRecordToEntity));
   } catch (error) {
@@ -137,8 +179,13 @@ app.get('/api/entities/:type/:id', async (req, res) => {
     const { type, id } = req.params;
     ensureEntityType(type);
 
-    const record = await prisma.entityRecord.findUnique({ where: { id: Number(id) } });
-    if (!record || record.type !== type) {
+    const objectId = toObjectId(id);
+    if (!objectId) {
+      return res.status(404).json({ error: 'Entity not found' });
+    }
+
+    const record = await entityCollection().findOne({ _id: objectId, type });
+    if (!record) {
       return res.status(404).json({ error: 'Entity not found' });
     }
 
@@ -156,20 +203,22 @@ app.post('/api/entities/:type', async (req, res) => {
 
     const payload = { ...req.body };
     delete payload.id;
-    const now = new Date().toISOString();
+    const nowIso = new Date().toISOString();
     const data = {
       ...payload,
-      created_date: payload.created_date || now,
-      updated_date: payload.updated_date || now
+      created_date: payload.created_date || nowIso,
+      updated_date: payload.updated_date || nowIso
     };
 
-    const record = await prisma.entityRecord.create({
-      data: {
-        type,
-        data
-      }
+    const createdAt = new Date();
+    const result = await entityCollection().insertOne({
+      type,
+      data,
+      createdAt,
+      updatedAt: createdAt
     });
 
+    const record = await entityCollection().findOne({ _id: result.insertedId });
     res.status(201).json(mapRecordToEntity(record));
   } catch (error) {
     console.error('Create entity failed', error);
@@ -182,26 +231,38 @@ app.put('/api/entities/:type/:id', async (req, res) => {
     const { type, id } = req.params;
     ensureEntityType(type);
 
-    const existing = await prisma.entityRecord.findUnique({ where: { id: Number(id) } });
-    if (!existing || existing.type !== type) {
+    const objectId = toObjectId(id);
+    if (!objectId) {
+      return res.status(404).json({ error: 'Entity not found' });
+    }
+
+    const existing = await entityCollection().findOne({ _id: objectId, type });
+    if (!existing) {
       return res.status(404).json({ error: 'Entity not found' });
     }
 
     const payload = { ...req.body };
     delete payload.id;
-    const now = new Date().toISOString();
+    const nowIso = new Date().toISOString();
+    const updatedAt = new Date();
 
-    const record = await prisma.entityRecord.update({
-      where: { id: existing.id },
-      data: {
-        data: {
-          ...existing.data,
-          ...payload,
-          updated_date: now
+    const data = {
+      ...existing.data,
+      ...payload,
+      updated_date: nowIso
+    };
+
+    await entityCollection().updateOne(
+      { _id: objectId },
+      {
+        $set: {
+          data,
+          updatedAt
         }
       }
-    });
+    );
 
+    const record = await entityCollection().findOne({ _id: objectId });
     res.json(mapRecordToEntity(record));
   } catch (error) {
     console.error('Update entity failed', error);
@@ -214,12 +275,17 @@ app.delete('/api/entities/:type/:id', async (req, res) => {
     const { type, id } = req.params;
     ensureEntityType(type);
 
-    const existing = await prisma.entityRecord.findUnique({ where: { id: Number(id) } });
-    if (!existing || existing.type !== type) {
+    const objectId = toObjectId(id);
+    if (!objectId) {
       return res.status(404).json({ error: 'Entity not found' });
     }
 
-    await prisma.entityRecord.delete({ where: { id: existing.id } });
+    const existing = await entityCollection().findOne({ _id: objectId, type });
+    if (!existing) {
+      return res.status(404).json({ error: 'Entity not found' });
+    }
+
+    await entityCollection().deleteOne({ _id: objectId });
     res.status(204).end();
   } catch (error) {
     console.error('Delete entity failed', error);
@@ -233,7 +299,7 @@ app.post('/api/entities/:type/filter', async (req, res) => {
     ensureEntityType(type);
     const { filters = {} } = req.body || {};
 
-    const records = await prisma.entityRecord.findMany({ where: { type } });
+    const records = await entityCollection().find({ type }).toArray();
     const result = records
       .map(mapRecordToEntity)
       .filter((entity) => applyFilters(entity, filters));
@@ -250,16 +316,20 @@ app.post('/api/entities/:type/filter', async (req, res) => {
 const authClient = {
   async currentUser(id) {
     if (id) {
-      const record = await prisma.entityRecord.findUnique({ where: { id: Number(id) } });
-      if (record && record.type === 'users') {
-        return mapRecordToEntity(record);
+      const objectId = toObjectId(id);
+      if (objectId) {
+        const record = await entityCollection().findOne({ _id: objectId, type: 'users' });
+        if (record) {
+          return mapRecordToEntity(record);
+        }
       }
     }
 
-    const firstUser = await prisma.entityRecord.findFirst({
-      where: { type: 'users' },
-      orderBy: { createdAt: 'asc' }
-    });
+    const firstUser = await entityCollection()
+      .find({ type: 'users' })
+      .sort({ createdAt: 1 })
+      .limit(1)
+      .next();
 
     return mapRecordToEntity(firstUser);
   }
@@ -285,7 +355,7 @@ app.post('/api/auth/logout', (_req, res) => {
 
 app.get('/api/auth/users', async (_req, res) => {
   try {
-    const records = await prisma.entityRecord.findMany({ where: { type: 'users' } });
+    const records = await entityCollection().find({ type: 'users' }).toArray();
     res.json(records.map(mapRecordToEntity));
   } catch (error) {
     console.error('List users failed', error);
@@ -296,19 +366,23 @@ app.get('/api/auth/users', async (_req, res) => {
 app.post('/api/auth/users', async (req, res) => {
   try {
     const payload = { ...req.body };
-    const now = new Date().toISOString();
+    const nowIso = new Date().toISOString();
 
-    const record = await prisma.entityRecord.create({
-      data: {
-        type: 'users',
-        data: {
-          ...payload,
-          created_date: payload.created_date || now,
-          updated_date: payload.updated_date || now
-        }
-      }
+    const createdAt = new Date();
+    const recordData = {
+      ...payload,
+      created_date: payload.created_date || nowIso,
+      updated_date: payload.updated_date || nowIso
+    };
+
+    const result = await entityCollection().insertOne({
+      type: 'users',
+      data: recordData,
+      createdAt,
+      updatedAt: createdAt
     });
 
+    const record = await entityCollection().findOne({ _id: result.insertedId });
     res.status(201).json(mapRecordToEntity(record));
   } catch (error) {
     console.error('Create user failed', error);
@@ -319,25 +393,37 @@ app.post('/api/auth/users', async (req, res) => {
 app.put('/api/auth/users/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const existing = await prisma.entityRecord.findUnique({ where: { id: Number(id) } });
-    if (!existing || existing.type !== 'users') {
+    const objectId = toObjectId(id);
+    if (!objectId) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const existing = await entityCollection().findOne({ _id: objectId, type: 'users' });
+    if (!existing) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     const payload = { ...req.body };
-    const now = new Date().toISOString();
+    const nowIso = new Date().toISOString();
+    const updatedAt = new Date();
 
-    const record = await prisma.entityRecord.update({
-      where: { id: existing.id },
-      data: {
-        data: {
-          ...existing.data,
-          ...payload,
-          updated_date: now
+    const data = {
+      ...existing.data,
+      ...payload,
+      updated_date: nowIso
+    };
+
+    await entityCollection().updateOne(
+      { _id: objectId },
+      {
+        $set: {
+          data,
+          updatedAt
         }
       }
-    });
+    );
 
+    const record = await entityCollection().findOne({ _id: objectId });
     res.json(mapRecordToEntity(record));
   } catch (error) {
     console.error('Update user failed', error);
@@ -348,12 +434,17 @@ app.put('/api/auth/users/:id', async (req, res) => {
 app.delete('/api/auth/users/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const existing = await prisma.entityRecord.findUnique({ where: { id: Number(id) } });
-    if (!existing || existing.type !== 'users') {
+    const objectId = toObjectId(id);
+    if (!objectId) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    await prisma.entityRecord.delete({ where: { id: existing.id } });
+    const existing = await entityCollection().findOne({ _id: objectId, type: 'users' });
+    if (!existing) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    await entityCollection().deleteOne({ _id: objectId });
     res.status(204).end();
   } catch (error) {
     console.error('Delete user failed', error);
@@ -366,7 +457,7 @@ app.delete('/api/auth/users/:id', async (req, res) => {
 const formatConversation = (conversation, includeMessages = false) => {
   if (!conversation) return null;
   const base = {
-    id: conversation.id,
+    id: conversation._id?.toString?.() || conversation.id,
     agent_name: conversation.agentName,
     metadata: conversation.metadata || null,
     created_at: conversation.createdAt?.toISOString?.() || null,
@@ -375,7 +466,7 @@ const formatConversation = (conversation, includeMessages = false) => {
 
   if (includeMessages) {
     base.messages = (conversation.messages || []).map((message) => ({
-      id: message.id,
+      id: message._id?.toString?.() || message.id,
       role: message.role,
       content: message.content,
       created_at: message.createdAt?.toISOString?.() || null
@@ -388,10 +479,12 @@ const formatConversation = (conversation, includeMessages = false) => {
 app.get('/api/conversations', async (req, res) => {
   try {
     const { agent_name: agentName } = req.query;
-    const conversations = await prisma.conversation.findMany({
-      where: agentName ? { agentName } : undefined,
-      orderBy: { updatedAt: 'desc' }
-    });
+    const query = agentName ? { agentName } : {};
+
+    const conversations = await conversationCollection()
+      .find(query)
+      .sort({ updatedAt: -1 })
+      .toArray();
 
     res.json(conversations.map((conversation) => formatConversation(conversation, false)));
   } catch (error) {
@@ -403,16 +496,22 @@ app.get('/api/conversations', async (req, res) => {
 app.get('/api/conversations/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const conversation = await prisma.conversation.findUnique({
-      where: { id: Number(id) },
-      include: { messages: { orderBy: { createdAt: 'asc' } } }
-    });
+    const objectId = toObjectId(id);
+    if (!objectId) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
 
+    const conversation = await conversationCollection().findOne({ _id: objectId });
     if (!conversation) {
       return res.status(404).json({ error: 'Conversation not found' });
     }
 
-    res.json(formatConversation(conversation, true));
+    const messages = await messageCollection()
+      .find({ conversationId: objectId })
+      .sort({ createdAt: 1 })
+      .toArray();
+
+    res.json(formatConversation({ ...conversation, messages }, true));
   } catch (error) {
     console.error('Get conversation failed', error);
     res.status(400).json({ error: error.message });
@@ -422,16 +521,28 @@ app.get('/api/conversations/:id', async (req, res) => {
 app.post('/api/conversations', async (req, res) => {
   try {
     const { agent_name: agentName = 'erp_assistant', metadata = {} } = req.body || {};
+    const createdAt = new Date();
 
-    const conversation = await prisma.conversation.create({
-      data: {
-        agentName,
-        metadata
-      },
-      include: { messages: true }
+    const result = await conversationCollection().insertOne({
+      agentName,
+      metadata,
+      createdAt,
+      updatedAt: createdAt
     });
 
-    res.status(201).json(formatConversation(conversation, true));
+    res.status(201).json(
+      formatConversation(
+        {
+          _id: result.insertedId,
+          agentName,
+          metadata,
+          createdAt,
+          updatedAt: createdAt,
+          messages: []
+        },
+        true
+      )
+    );
   } catch (error) {
     console.error('Create conversation failed', error);
     res.status(400).json({ error: error.message });
@@ -443,7 +554,7 @@ const buildAssistantReply = (content) => {
     return 'Thanks for reaching out. How can I assist you today?';
   }
 
-  return `I heard: "${content.slice(0, 200)}". I\'m a demo assistant, so please adapt this response as needed.`;
+  return `I heard: "${content.slice(0, 200)}". I'm a demo assistant, so please adapt this response as needed.`;
 };
 
 app.post('/api/conversations/:id/messages', async (req, res) => {
@@ -451,7 +562,12 @@ app.post('/api/conversations/:id/messages', async (req, res) => {
     const { id } = req.params;
     const { role, content } = req.body || {};
 
-    const conversation = await prisma.conversation.findUnique({ where: { id: Number(id) } });
+    const objectId = toObjectId(id);
+    if (!objectId) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+
+    const conversation = await conversationCollection().findOne({ _id: objectId });
     if (!conversation) {
       return res.status(404).json({ error: 'Conversation not found' });
     }
@@ -460,32 +576,46 @@ app.post('/api/conversations/:id/messages', async (req, res) => {
       return res.status(400).json({ error: 'role and content are required' });
     }
 
-    await prisma.message.create({
-      data: {
-        conversationId: conversation.id,
-        role,
-        content
-      }
+    await messageCollection().insertOne({
+      conversationId: objectId,
+      role,
+      content,
+      createdAt: new Date()
     });
 
     // Naive assistant reply for demo purposes.
     if (role !== 'assistant') {
-      await prisma.message.create({
-        data: {
-          conversationId: conversation.id,
-          role: 'assistant',
-          content: buildAssistantReply(content)
-        }
+      await messageCollection().insertOne({
+        conversationId: objectId,
+        role: 'assistant',
+        content: buildAssistantReply(content),
+        createdAt: new Date()
       });
     }
 
-    const updated = await prisma.conversation.update({
-      where: { id: conversation.id },
-      data: { updatedAt: new Date() },
-      include: { messages: { orderBy: { createdAt: 'asc' } } }
-    });
+    const updatedAt = new Date();
+    await conversationCollection().updateOne(
+      { _id: objectId },
+      {
+        $set: { updatedAt }
+      }
+    );
 
-    res.json(formatConversation(updated, true));
+    const messages = await messageCollection()
+      .find({ conversationId: objectId })
+      .sort({ createdAt: 1 })
+      .toArray();
+
+    res.json(
+      formatConversation(
+        {
+          ...conversation,
+          updatedAt,
+          messages
+        },
+        true
+      )
+    );
   } catch (error) {
     console.error('Add message failed', error);
     res.status(400).json({ error: error.message });
@@ -498,51 +628,73 @@ app.get('/api/health', async (_req, res) => {
   res.json({ status: 'ok' });
 });
 
+const ensureIndexes = async () => {
+  await Promise.all([
+    entityCollection().createIndex({ type: 1 }),
+    entityCollection().createIndex({ createdAt: -1 }),
+    entityCollection().createIndex({ updatedAt: -1 }),
+    conversationCollection().createIndex({ updatedAt: -1 }),
+    messageCollection().createIndex({ conversationId: 1, createdAt: 1 })
+  ]);
+};
+
 const seedDatabase = async () => {
-  const existingUsers = await prisma.entityRecord.count({ where: { type: 'users' } });
+  const entities = entityCollection();
+  const nowIso = new Date().toISOString();
+
+  const existingUsers = await entities.countDocuments({ type: 'users' });
   if (existingUsers === 0) {
-    await prisma.entityRecord.create({
+    const createdAt = new Date();
+    await entities.insertOne({
+      type: 'users',
       data: {
-        type: 'users',
-        data: {
-          email: 'demo@agenticerp.test',
-          name: 'Demo User',
-          created_date: new Date().toISOString(),
-          updated_date: new Date().toISOString()
-        }
-      }
+        email: 'demo@agenticerp.test',
+        name: 'Demo User',
+        created_date: nowIso,
+        updated_date: nowIso
+      },
+      createdAt,
+      updatedAt: createdAt
     });
   }
 
-  const existingCompanyProfiles = await prisma.entityRecord.count({ where: { type: 'company-profiles' } });
+  const existingCompanyProfiles = await entities.countDocuments({ type: 'company-profiles' });
   if (existingCompanyProfiles === 0) {
-    await prisma.entityRecord.create({
+    const createdAt = new Date();
+    await entities.insertOne({
+      type: 'company-profiles',
       data: {
-        type: 'company-profiles',
-        data: {
-          company_name: 'Agentic ERP Demo',
-          currency: 'USD',
-          created_by: 'demo@agenticerp.test',
-          created_date: new Date().toISOString(),
-          updated_date: new Date().toISOString()
-        }
-      }
+        company_name: 'Agentic ERP Demo',
+        currency: 'USD',
+        created_by: 'demo@agenticerp.test',
+        created_date: nowIso,
+        updated_date: nowIso
+      },
+      createdAt,
+      updatedAt: createdAt
     });
   }
 };
 
-seedDatabase()
-  .catch((error) => {
-    console.error('Database seed failed', error);
-  })
-  .finally(() => {
+const startServer = async () => {
+  try {
+    await connectToDatabase();
+    await ensureIndexes();
+    await seedDatabase();
+
     app.listen(PORT, () => {
       console.log(`API server listening on http://localhost:${PORT}`);
     });
-  });
+  } catch (error) {
+    console.error('Failed to start API server', error);
+    process.exit(1);
+  }
+};
+
+startServer();
 
 const shutdown = async () => {
-  await prisma.$disconnect();
+  await mongoClient.close();
   process.exit(0);
 };
 
