@@ -57,8 +57,6 @@ export const JournalEntry = base44.entities.JournalEntry;
 
 export const JournalEntryLine = base44.entities.JournalEntryLine;
 
-export const LicenseKey = base44.entities.LicenseKey;
-
 
 
 // auth sdk:
