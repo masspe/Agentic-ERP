@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Card, CardContent } from "@/components/ui/card"; // Added Card components
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"; // Added dropdown components
-import { Expense } from ".@/api/entities";
+import { Expense } from "@/api/entities";
 import { useToast } from '../contexts/ToastContext';
 
 const statusColors = {
