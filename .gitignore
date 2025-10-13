@@ -13,7 +13,6 @@ dist-ssr
 *.local
 
 # Editor directories and files
-.vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
@@ -23,6 +22,6 @@ dist-ssr
 *.sln
 *.sw?
 
-.env
 prisma/dev.db
 prisma/dev.db-journal
+config.bat
