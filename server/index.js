@@ -640,40 +640,892 @@ const ensureIndexes = async () => {
 
 const seedDatabase = async () => {
   const entities = entityCollection();
-  const nowIso = new Date().toISOString();
+  const demoEmail = 'demo@agenticerp.test';
+  const now = new Date();
 
-  const existingUsers = await entities.countDocuments({ type: 'users' });
-  if (existingUsers === 0) {
-    const createdAt = new Date();
-    await entities.insertOne({
-      type: 'users',
-      data: {
-        email: 'demo@agenticerp.test',
-        name: 'Demo User',
-        created_date: nowIso,
-        updated_date: nowIso
-      },
-      createdAt,
-      updatedAt: createdAt
-    });
-  }
+  const ensureSeedRecords = async (type, records = []) => {
+    if (!Array.isArray(records) || records.length === 0) {
+      return {};
+    }
 
-  const existingCompanyProfiles = await entities.countDocuments({ type: 'company-profiles' });
-  if (existingCompanyProfiles === 0) {
-    const createdAt = new Date();
-    await entities.insertOne({
-      type: 'company-profiles',
-      data: {
-        company_name: 'Agentic ERP Demo',
-        currency: 'USD',
-        created_by: 'demo@agenticerp.test',
-        created_date: nowIso,
-        updated_date: nowIso
-      },
-      createdAt,
-      updatedAt: createdAt
+    const count = await entities.countDocuments({ type });
+    if (count > 0) {
+      return {};
+    }
+
+    const seedKeyToId = {};
+
+    const documents = records.map((record) => {
+      const {
+        _seedKey,
+        _createdAt,
+        _updatedAt,
+        created_date: explicitCreated,
+        updated_date: explicitUpdated,
+        created_by,
+        ...rest
+      } = record;
+
+      const createdAt = _createdAt ? new Date(_createdAt) : now;
+      const updatedAt = _updatedAt ? new Date(_updatedAt) : createdAt;
+
+      const createdDate = explicitCreated || createdAt.toISOString();
+      const updatedDate = explicitUpdated || updatedAt.toISOString();
+
+      const data = {
+        ...rest,
+        created_by: created_by || demoEmail,
+        created_date: createdDate,
+        updated_date: updatedDate
+      };
+
+      return {
+        document: {
+          type,
+          data,
+          createdAt,
+          updatedAt
+        },
+        seedKey: _seedKey || null
+      };
     });
-  }
+
+    const insertResult = await entities.insertMany(documents.map(({ document }) => document));
+
+    Object.values(insertResult.insertedIds).forEach((id, index) => {
+      const key = documents[index].seedKey;
+      if (key) {
+        seedKeyToId[key] = id.toString();
+      }
+    });
+
+    return seedKeyToId;
+  };
+
+  const seedReferences = {};
+
+  // Seed demo user
+  const userSeeds = await ensureSeedRecords('users', [
+    {
+      _seedKey: 'user-demo',
+      email: demoEmail,
+      name: 'Demo User'
+    }
+  ]);
+  Object.assign(seedReferences, userSeeds);
+
+  // Seed company profile with active subscription
+  const companySeeds = await ensureSeedRecords('company-profiles', [
+    {
+      _seedKey: 'company-demo',
+      company_name: 'Agentic ERP Demo',
+      currency: 'USD',
+      address: '500 Innovation Drive, Suite 12, San Francisco, CA 94105',
+      phone: '+1 (415) 555-0110',
+      website: 'https://agenticerp.test',
+      tax_id: 'DEM-001-2024',
+      subscription_status: 'active',
+      subscription_ends_at: new Date(now.getFullYear(), now.getMonth() + 6, 15).toISOString(),
+      created_by: demoEmail
+    }
+  ]);
+  Object.assign(seedReferences, companySeeds);
+
+  // Supporting reference data
+  const categorySeeds = await ensureSeedRecords('categories', [
+    {
+      _seedKey: 'category-electronics',
+      name: 'Electronics',
+      description: 'Devices, accessories and gadgets',
+      color: '#6366f1',
+      is_active: true
+    },
+    {
+      _seedKey: 'category-office',
+      name: 'Office Supplies',
+      description: 'Workplace consumables and accessories',
+      color: '#22c55e',
+      is_active: true
+    },
+    {
+      _seedKey: 'category-services',
+      name: 'Professional Services',
+      description: 'Billable consulting services',
+      color: '#f97316',
+      is_active: true
+    }
+  ]);
+  Object.assign(seedReferences, categorySeeds);
+
+  const customerSeeds = await ensureSeedRecords('customers', [
+    {
+      _seedKey: 'customer-acme',
+      name: 'Acme Corporation',
+      contact_person: 'Laura Chen',
+      email: 'accounts@acme.com',
+      phone: '+1 (415) 555-1001',
+      city: 'San Francisco',
+      country: 'USA',
+      industry: 'Technology',
+      payment_terms: 'net_30',
+      status: 'active'
+    },
+    {
+      _seedKey: 'customer-globex',
+      name: 'Globex Industries',
+      contact_person: 'Miguel Torres',
+      email: 'finance@globex.io',
+      phone: '+1 (206) 555-2190',
+      city: 'Seattle',
+      country: 'USA',
+      industry: 'Manufacturing',
+      payment_terms: 'net_45',
+      status: 'active'
+    },
+    {
+      _seedKey: 'customer-initech',
+      name: 'Initech Solutions',
+      contact_person: 'Priya Desai',
+      email: 'billing@initech.co',
+      phone: '+1 (617) 555-8891',
+      city: 'Boston',
+      country: 'USA',
+      industry: 'Consulting',
+      payment_terms: 'due_on_receipt',
+      status: 'prospect'
+    }
+  ]);
+  Object.assign(seedReferences, customerSeeds);
+
+  const supplierSeeds = await ensureSeedRecords('suppliers', [
+    {
+      _seedKey: 'supplier-nimbus',
+      name: 'Nimbus Distribution',
+      contact_person: 'Hannah Wright',
+      email: 'orders@nimbusdistribution.com',
+      phone: '+1 (303) 555-7330',
+      city: 'Denver',
+      country: 'USA',
+      payment_terms: 'net_30',
+      rating: 'preferred'
+    },
+    {
+      _seedKey: 'supplier-vertex',
+      name: 'Vertex Components',
+      contact_person: 'Samuel Rivera',
+      email: 'sales@vertexcomponents.net',
+      phone: '+1 (602) 555-9401',
+      city: 'Phoenix',
+      country: 'USA',
+      payment_terms: 'net_45',
+      rating: 'standard'
+    }
+  ]);
+  Object.assign(seedReferences, supplierSeeds);
+
+  const warehouseSeeds = await ensureSeedRecords('warehouses', [
+    {
+      _seedKey: 'warehouse-west',
+      name: 'West Coast DC',
+      location: 'Oakland, CA',
+      manager: 'Thomas Blake',
+      status: 'active'
+    },
+    {
+      _seedKey: 'warehouse-east',
+      name: 'East Coast Hub',
+      location: 'Newark, NJ',
+      manager: 'Angela Patel',
+      status: 'active'
+    }
+  ]);
+  Object.assign(seedReferences, warehouseSeeds);
+
+  const productSeeds = await ensureSeedRecords('products', [
+    {
+      _seedKey: 'product-sensor',
+      name: 'IoT Environment Sensor',
+      sku: 'IOT-ENS-001',
+      category_id: seedReferences['category-electronics'],
+      category_name: 'Electronics',
+      warehouse_id: seedReferences['warehouse-west'],
+      warehouse_name: 'West Coast DC',
+      unit: 'pcs',
+      purchase_price: 125.0,
+      selling_price: 229.0,
+      current_stock: 42,
+      minimum_stock: 10,
+      status: 'active'
+    },
+    {
+      _seedKey: 'product-router',
+      name: 'Industrial Edge Router',
+      sku: 'NET-EDG-104',
+      category_id: seedReferences['category-electronics'],
+      category_name: 'Electronics',
+      warehouse_id: seedReferences['warehouse-west'],
+      warehouse_name: 'West Coast DC',
+      unit: 'pcs',
+      purchase_price: 310.0,
+      selling_price: 499.0,
+      current_stock: 18,
+      minimum_stock: 8,
+      status: 'active'
+    },
+    {
+      _seedKey: 'product-onboarding',
+      name: 'Remote Onboarding Package',
+      sku: 'SRV-ONB-310',
+      category_id: seedReferences['category-services'],
+      category_name: 'Professional Services',
+      unit: 'package',
+      purchase_price: 0,
+      selling_price: 1800.0,
+      current_stock: 999,
+      minimum_stock: 0,
+      status: 'service'
+    }
+  ]);
+  Object.assign(seedReferences, productSeeds);
+
+  const expenseSeeds = await ensureSeedRecords('expenses', [
+    {
+      _seedKey: 'expense-software',
+      description: 'Annual software subscriptions',
+      category: 'software',
+      status: 'approved',
+      amount: 2450.0,
+      currency: 'USD',
+      date: new Date(now.getFullYear(), now.getMonth(), 4).toISOString(),
+      payment_method: 'bank_transfer',
+      reference_number: 'EXP-2024-001'
+    },
+    {
+      _seedKey: 'expense-travel',
+      description: 'Customer onsite visit',
+      category: 'travel',
+      status: 'pending',
+      amount: 860.75,
+      currency: 'USD',
+      date: new Date(now.getFullYear(), now.getMonth() - 1, 22).toISOString(),
+      payment_method: 'corporate_card',
+      reference_number: 'EXP-2024-002'
+    },
+    {
+      _seedKey: 'expense-office',
+      description: 'Office supplies restock',
+      category: 'office_supplies',
+      status: 'paid',
+      amount: 320.5,
+      currency: 'USD',
+      date: new Date(now.getFullYear(), now.getMonth() - 2, 12).toISOString(),
+      payment_method: 'cash',
+      reference_number: 'EXP-2024-003'
+    }
+  ]);
+  Object.assign(seedReferences, expenseSeeds);
+
+  const quotationSeeds = await ensureSeedRecords('quotations', [
+    {
+      _seedKey: 'quotation-acme',
+      quotation_number: 'QT-2024-001',
+      customer_id: seedReferences['customer-acme'],
+      customer_name: 'Acme Corporation',
+      date: new Date(now.getFullYear(), now.getMonth(), 2).toISOString(),
+      expiry_date: new Date(now.getFullYear(), now.getMonth(), 17).toISOString(),
+      total_amount: 12450.0,
+      currency: 'USD',
+      status: 'sent',
+      items: [
+        {
+          product_id: seedReferences['product-sensor'],
+          description: 'IoT Environment Sensor',
+          quantity: 30,
+          unit_price: 229.0,
+          total: 6870.0
+        }
+      ]
+    },
+    {
+      _seedKey: 'quotation-globex',
+      quotation_number: 'QT-2024-002',
+      customer_id: seedReferences['customer-globex'],
+      customer_name: 'Globex Industries',
+      date: new Date(now.getFullYear(), now.getMonth() - 1, 12).toISOString(),
+      expiry_date: new Date(now.getFullYear(), now.getMonth() - 1, 28).toISOString(),
+      total_amount: 8900.0,
+      currency: 'USD',
+      status: 'accepted',
+      items: [
+        {
+          product_id: seedReferences['product-router'],
+          description: 'Industrial Edge Router',
+          quantity: 12,
+          unit_price: 499.0,
+          total: 5988.0
+        }
+      ]
+    }
+  ]);
+  Object.assign(seedReferences, quotationSeeds);
+
+  const invoiceSeeds = await ensureSeedRecords('invoices', [
+    {
+      _seedKey: 'invoice-acme',
+      invoice_number: 'INV-2024-104',
+      customer_id: seedReferences['customer-acme'],
+      customer_name: 'Acme Corporation',
+      date: new Date(now.getFullYear(), now.getMonth(), 5).toISOString(),
+      due_date: new Date(now.getFullYear(), now.getMonth(), 20).toISOString(),
+      status: 'sent',
+      currency: 'USD',
+      subtotal: 6870.0,
+      tax: 480.9,
+      total_amount: 7350.9,
+      notes: 'Net 30 payment terms apply',
+      items: [
+        {
+          product_id: seedReferences['product-sensor'],
+          description: 'IoT Environment Sensor',
+          quantity: 30,
+          unit_price: 229.0,
+          total: 6870.0
+        }
+      ]
+    },
+    {
+      _seedKey: 'invoice-globex',
+      invoice_number: 'INV-2024-096',
+      customer_id: seedReferences['customer-globex'],
+      customer_name: 'Globex Industries',
+      date: new Date(now.getFullYear(), now.getMonth() - 1, 15).toISOString(),
+      due_date: new Date(now.getFullYear(), now.getMonth(), 15).toISOString(),
+      status: 'paid',
+      currency: 'USD',
+      subtotal: 5988.0,
+      tax: 419.16,
+      total_amount: 6407.16,
+      notes: 'Paid via bank transfer',
+      items: [
+        {
+          product_id: seedReferences['product-router'],
+          description: 'Industrial Edge Router',
+          quantity: 12,
+          unit_price: 499.0,
+          total: 5988.0
+        }
+      ]
+    },
+    {
+      _seedKey: 'invoice-initech',
+      invoice_number: 'INV-2024-088',
+      customer_id: seedReferences['customer-initech'],
+      customer_name: 'Initech Solutions',
+      date: new Date(now.getFullYear(), now.getMonth() - 2, 9).toISOString(),
+      due_date: new Date(now.getFullYear(), now.getMonth() - 1, 9).toISOString(),
+      status: 'overdue',
+      currency: 'USD',
+      subtotal: 3600.0,
+      tax: 252.0,
+      total_amount: 3852.0,
+      notes: 'Overdue invoice follow-up scheduled',
+      items: [
+        {
+          product_id: seedReferences['product-onboarding'],
+          description: 'Remote Onboarding Package',
+          quantity: 2,
+          unit_price: 1800.0,
+          total: 3600.0
+        }
+      ]
+    }
+  ]);
+  Object.assign(seedReferences, invoiceSeeds);
+
+  const paymentSeeds = await ensureSeedRecords('payments', [
+    {
+      _seedKey: 'payment-globex',
+      payment_number: 'RCPT-2024-058',
+      invoice_id: seedReferences['invoice-globex'],
+      invoice_number: 'INV-2024-096',
+      customer_id: seedReferences['customer-globex'],
+      customer_name: 'Globex Industries',
+      payment_date: new Date(now.getFullYear(), now.getMonth(), 3).toISOString(),
+      amount_received: 6407.16,
+      currency: 'USD',
+      payment_method: 'bank_transfer',
+      reference_number: 'BT-552210'
+    },
+    {
+      _seedKey: 'payment-acme',
+      payment_number: 'RCPT-2024-049',
+      invoice_id: seedReferences['invoice-acme'],
+      invoice_number: 'INV-2024-104',
+      customer_id: seedReferences['customer-acme'],
+      customer_name: 'Acme Corporation',
+      payment_date: new Date(now.getFullYear(), now.getMonth(), 18).toISOString(),
+      amount_received: 3675.45,
+      currency: 'USD',
+      payment_method: 'online_payment',
+      reference_number: 'TRX-88342',
+      notes: 'Partial payment received'
+    }
+  ]);
+  Object.assign(seedReferences, paymentSeeds);
+
+  const creditNoteSeeds = await ensureSeedRecords('credit-notes', [
+    {
+      _seedKey: 'creditnote-globex',
+      credit_note_number: 'CN-2024-011',
+      invoice_id: seedReferences['invoice-globex'],
+      invoice_number: 'INV-2024-096',
+      customer_id: seedReferences['customer-globex'],
+      customer_name: 'Globex Industries',
+      date: new Date(now.getFullYear(), now.getMonth(), 7).toISOString(),
+      reason: 'Volume discount adjustment',
+      status: 'issued',
+      total_amount: 250.0,
+      currency: 'USD'
+    }
+  ]);
+  Object.assign(seedReferences, creditNoteSeeds);
+
+  const deliveryOrderSeeds = await ensureSeedRecords('delivery-orders', [
+    {
+      _seedKey: 'delivery-acme',
+      delivery_number: 'DO-2024-033',
+      invoice_id: seedReferences['invoice-acme'],
+      customer_id: seedReferences['customer-acme'],
+      customer_name: 'Acme Corporation',
+      scheduled_date: new Date(now.getFullYear(), now.getMonth(), 8).toISOString(),
+      dispatched_date: new Date(now.getFullYear(), now.getMonth(), 9).toISOString(),
+      status: 'delivered',
+      driver_name: 'Janet Cruz',
+      warehouse_id: seedReferences['warehouse-west'],
+      warehouse_name: 'West Coast DC'
+    }
+  ]);
+  Object.assign(seedReferences, deliveryOrderSeeds);
+
+  const purchaseOrderSeeds = await ensureSeedRecords('purchase-orders', [
+    {
+      _seedKey: 'po-nimbus',
+      po_number: 'PO-2024-072',
+      supplier_id: seedReferences['supplier-nimbus'],
+      supplier_name: 'Nimbus Distribution',
+      date: new Date(now.getFullYear(), now.getMonth() - 1, 3).toISOString(),
+      expected_delivery: new Date(now.getFullYear(), now.getMonth(), 2).toISOString(),
+      status: 'received',
+      currency: 'USD',
+      total_amount: 9850.0,
+      warehouse_id: seedReferences['warehouse-west'],
+      warehouse_name: 'West Coast DC',
+      items: [
+        {
+          product_id: seedReferences['product-sensor'],
+          description: 'IoT Environment Sensor',
+          quantity: 50,
+          unit_price: 170.0,
+          total: 8500.0
+        }
+      ]
+    },
+    {
+      _seedKey: 'po-vertex',
+      po_number: 'PO-2024-068',
+      supplier_id: seedReferences['supplier-vertex'],
+      supplier_name: 'Vertex Components',
+      date: new Date(now.getFullYear(), now.getMonth() - 2, 14).toISOString(),
+      expected_delivery: new Date(now.getFullYear(), now.getMonth() - 1, 5).toISOString(),
+      status: 'confirmed',
+      currency: 'USD',
+      total_amount: 7200.0,
+      warehouse_id: seedReferences['warehouse-east'],
+      warehouse_name: 'East Coast Hub',
+      items: [
+        {
+          product_id: seedReferences['product-router'],
+          description: 'Industrial Edge Router',
+          quantity: 20,
+          unit_price: 360.0,
+          total: 7200.0
+        }
+      ]
+    }
+  ]);
+  Object.assign(seedReferences, purchaseOrderSeeds);
+
+  const billSeeds = await ensureSeedRecords('bills', [
+    {
+      _seedKey: 'bill-nimbus',
+      bill_number: 'BILL-2024-020',
+      supplier_id: seedReferences['supplier-nimbus'],
+      supplier_name: 'Nimbus Distribution',
+      bill_date: new Date(now.getFullYear(), now.getMonth() - 1, 8).toISOString(),
+      due_date: new Date(now.getFullYear(), now.getMonth(), 7).toISOString(),
+      status: 'awaiting_payment',
+      currency: 'USD',
+      total_amount: 9850.0
+    },
+    {
+      _seedKey: 'bill-vertex',
+      bill_number: 'BILL-2024-018',
+      supplier_id: seedReferences['supplier-vertex'],
+      supplier_name: 'Vertex Components',
+      bill_date: new Date(now.getFullYear(), now.getMonth() - 2, 20).toISOString(),
+      due_date: new Date(now.getFullYear(), now.getMonth() - 1, 20).toISOString(),
+      status: 'paid',
+      currency: 'USD',
+      total_amount: 7200.0
+    }
+  ]);
+  Object.assign(seedReferences, billSeeds);
+
+  const reimbursementSeeds = await ensureSeedRecords('reimbursements', [
+    {
+      _seedKey: 'reimbursement-travel',
+      reimbursement_number: 'RB-2024-014',
+      employee_name: 'Jordan Matthews',
+      department: 'Sales',
+      purpose: 'Client visit travel expenses',
+      amount: 480.25,
+      currency: 'USD',
+      status: 'submitted',
+      submitted_date: new Date(now.getFullYear(), now.getMonth(), 6).toISOString()
+    },
+    {
+      _seedKey: 'reimbursement-training',
+      reimbursement_number: 'RB-2024-012',
+      employee_name: 'Natasha Bryant',
+      department: 'Customer Success',
+      purpose: 'Certification training course',
+      amount: 950.0,
+      currency: 'USD',
+      status: 'approved',
+      submitted_date: new Date(now.getFullYear(), now.getMonth() - 1, 18).toISOString()
+    }
+  ]);
+  Object.assign(seedReferences, reimbursementSeeds);
+
+  const vendorCreditSeeds = await ensureSeedRecords('vendor-credits', [
+    {
+      _seedKey: 'vendorcredit-nimbus',
+      credit_number: 'VC-2024-004',
+      supplier_id: seedReferences['supplier-nimbus'],
+      supplier_name: 'Nimbus Distribution',
+      date: new Date(now.getFullYear(), now.getMonth(), 1).toISOString(),
+      reason: 'Damaged goods return',
+      status: 'open',
+      total_amount: 450.0,
+      currency: 'USD'
+    }
+  ]);
+  Object.assign(seedReferences, vendorCreditSeeds);
+
+  const returnNoteSeeds = await ensureSeedRecords('return-notes', [
+    {
+      _seedKey: 'returnnote-acme',
+      return_number: 'RN-2024-006',
+      customer_id: seedReferences['customer-acme'],
+      customer_name: 'Acme Corporation',
+      date: new Date(now.getFullYear(), now.getMonth(), 12).toISOString(),
+      reason: 'Calibration variance detected',
+      status: 'processing',
+      total_amount: 229.0,
+      currency: 'USD'
+    }
+  ]);
+  Object.assign(seedReferences, returnNoteSeeds);
+
+  await ensureSeedRecords('stock-adjustments', [
+    {
+      adjustment_number: 'ADJ-2024-003',
+      product_id: seedReferences['product-sensor'],
+      product_name: 'IoT Environment Sensor',
+      adjustment_date: new Date(now.getFullYear(), now.getMonth() - 1, 27).toISOString(),
+      quantity_adjusted: -3,
+      reason: 'Quality assurance failure',
+      status: 'posted'
+    }
+  ]);
+
+  const prospectSeeds = await ensureSeedRecords('prospects', [
+    {
+      _seedKey: 'prospect-horizon',
+      company_name: 'Horizon Analytics',
+      contact_person: 'Emma Li',
+      email: 'emma.li@horizonanalytics.ai',
+      phone: '+1 (917) 555-6670',
+      stage: 'proposal_sent',
+      lead_source: 'Webinar',
+      estimated_value: 18500.0
+    },
+    {
+      _seedKey: 'prospect-futura',
+      company_name: 'Futura Robotics',
+      contact_person: 'Arjun Mehta',
+      email: 'arjun@futurarobotics.com',
+      phone: '+1 (650) 555-0199',
+      stage: 'qualification',
+      lead_source: 'Partner referral',
+      estimated_value: 27600.0
+    }
+  ]);
+  Object.assign(seedReferences, prospectSeeds);
+
+  await ensureSeedRecords('visits', [
+    {
+      visit_number: 'VIS-2024-021',
+      prospect_id: seedReferences['prospect-horizon'],
+      company_name: 'Horizon Analytics',
+      contact_person: 'Emma Li',
+      purpose: 'product_demo',
+      scheduled_date: new Date(now.getFullYear(), now.getMonth(), 11).toISOString(),
+      status: 'completed',
+      notes: 'Strong interest in predictive maintenance module'
+    },
+    {
+      visit_number: 'VIS-2024-019',
+      prospect_id: seedReferences['prospect-futura'],
+      company_name: 'Futura Robotics',
+      contact_person: 'Arjun Mehta',
+      purpose: 'requirement_gathering',
+      scheduled_date: new Date(now.getFullYear(), now.getMonth(), 19).toISOString(),
+      status: 'scheduled',
+      notes: 'Follow-up on integration questions'
+    }
+  ]);
+
+  await ensureSeedRecords('tasks', [
+    {
+      task_number: 'TASK-2024-045',
+      title: 'Prepare implementation roadmap for Acme',
+      assignee: 'Laura Chen',
+      related_customer_id: seedReferences['customer-acme'],
+      due_date: new Date(now.getFullYear(), now.getMonth(), 21).toISOString(),
+      priority: 'high',
+      status: 'in_progress'
+    },
+    {
+      task_number: 'TASK-2024-041',
+      title: 'Update onboarding playbook',
+      assignee: 'Jordan Matthews',
+      due_date: new Date(now.getFullYear(), now.getMonth(), 25).toISOString(),
+      priority: 'medium',
+      status: 'not_started'
+    }
+  ]);
+
+  const chartOfAccountsSeeds = await ensureSeedRecords('chart-of-accounts', [
+    {
+      _seedKey: 'coa-1000',
+      account_number: '1000',
+      name: 'Cash and Cash Equivalents',
+      type: 'asset',
+      subtype: 'current_asset',
+      currency: 'USD',
+      is_active: true
+    },
+    {
+      _seedKey: 'coa-1100',
+      account_number: '1100',
+      name: 'Accounts Receivable',
+      type: 'asset',
+      subtype: 'current_asset',
+      currency: 'USD',
+      is_active: true
+    },
+    {
+      _seedKey: 'coa-2000',
+      account_number: '2000',
+      name: 'Accounts Payable',
+      type: 'liability',
+      subtype: 'current_liability',
+      currency: 'USD',
+      is_active: true
+    },
+    {
+      _seedKey: 'coa-4000',
+      account_number: '4000',
+      name: 'Sales Revenue',
+      type: 'income',
+      subtype: 'operating_income',
+      currency: 'USD',
+      is_active: true
+    },
+    {
+      _seedKey: 'coa-5000',
+      account_number: '5000',
+      name: 'Cost of Goods Sold',
+      type: 'expense',
+      subtype: 'direct_costs',
+      currency: 'USD',
+      is_active: true
+    }
+  ]);
+  Object.assign(seedReferences, chartOfAccountsSeeds);
+
+  const journalEntrySeeds = await ensureSeedRecords('journal-entries', [
+    {
+      _seedKey: 'je-invoice-globex',
+      entry_number: 'JE-2024-090',
+      entry_date: new Date(now.getFullYear(), now.getMonth() - 1, 15).toISOString(),
+      transaction_type: 'Invoice',
+      reference_number: 'INV-2024-096',
+      posted_by: 'Demo User',
+      description: 'Invoice issued to Globex Industries',
+      total_debit: 6407.16,
+      total_credit: 6407.16
+    },
+    {
+      _seedKey: 'je-payment-globex',
+      entry_number: 'JE-2024-091',
+      entry_date: new Date(now.getFullYear(), now.getMonth(), 3).toISOString(),
+      transaction_type: 'Payment',
+      reference_number: 'RCPT-2024-058',
+      posted_by: 'Demo User',
+      description: 'Payment received from Globex Industries',
+      total_debit: 6407.16,
+      total_credit: 6407.16
+    },
+    {
+      _seedKey: 'je-expense-software',
+      entry_number: 'JE-2024-098',
+      entry_date: new Date(now.getFullYear(), now.getMonth(), 4).toISOString(),
+      transaction_type: 'Expense',
+      reference_number: 'EXP-2024-001',
+      posted_by: 'Demo User',
+      description: 'Recorded software subscription expense',
+      total_debit: 2450.0,
+      total_credit: 2450.0
+    }
+  ]);
+  Object.assign(seedReferences, journalEntrySeeds);
+
+  await ensureSeedRecords('journal-entry-lines', [
+    {
+      journal_entry_id: seedReferences['je-invoice-globex'],
+      account_id: seedReferences['coa-1100'],
+      account_number: '1100',
+      account_name: 'Accounts Receivable',
+      description: 'Recognise receivable for Globex invoice',
+      debit: 6407.16,
+      credit: 0
+    },
+    {
+      journal_entry_id: seedReferences['je-invoice-globex'],
+      account_id: seedReferences['coa-4000'],
+      account_number: '4000',
+      account_name: 'Sales Revenue',
+      description: 'Recognise sales revenue',
+      debit: 0,
+      credit: 6407.16
+    },
+    {
+      journal_entry_id: seedReferences['je-payment-globex'],
+      account_id: seedReferences['coa-1000'],
+      account_number: '1000',
+      account_name: 'Cash and Cash Equivalents',
+      description: 'Payment received via bank transfer',
+      debit: 6407.16,
+      credit: 0
+    },
+    {
+      journal_entry_id: seedReferences['je-payment-globex'],
+      account_id: seedReferences['coa-1100'],
+      account_number: '1100',
+      account_name: 'Accounts Receivable',
+      description: 'Clear customer receivable',
+      debit: 0,
+      credit: 6407.16
+    },
+    {
+      journal_entry_id: seedReferences['je-expense-software'],
+      account_id: seedReferences['coa-5000'],
+      account_number: '5000',
+      account_name: 'Cost of Goods Sold',
+      description: 'Recognise software subscription expense',
+      debit: 2450.0,
+      credit: 0
+    },
+    {
+      journal_entry_id: seedReferences['je-expense-software'],
+      account_id: seedReferences['coa-2000'],
+      account_number: '2000',
+      account_name: 'Accounts Payable',
+      description: 'Pending payment to vendor',
+      debit: 0,
+      credit: 2450.0
+    }
+  ]);
+
+  await ensureSeedRecords('subscription-plans', [
+    {
+      plan_code: 'starter',
+      name: 'Starter Plan',
+      price: 49,
+      billing_cycle: 'monthly',
+      features: ['Invoices', 'Expenses', 'Inventory'],
+      is_active: true
+    },
+    {
+      plan_code: 'growth',
+      name: 'Growth Plan',
+      price: 99,
+      billing_cycle: 'monthly',
+      features: ['All Starter features', 'Advanced analytics', 'Team collaboration'],
+      is_active: true
+    }
+  ]);
+
+  const userSubscriptionSeeds = await ensureSeedRecords('user-subscriptions', [
+    {
+      _seedKey: 'subscription-demo',
+      user_id: seedReferences['user-demo'],
+      plan_code: 'growth',
+      status: 'active',
+      started_at: new Date(now.getFullYear(), now.getMonth() - 1, 10).toISOString(),
+      renews_at: new Date(now.getFullYear(), now.getMonth() + 1, 10).toISOString()
+    }
+  ]);
+  Object.assign(seedReferences, userSubscriptionSeeds);
+
+  await ensureSeedRecords('subscription-logs', [
+    {
+      subscription_id: seedReferences['subscription-demo'] || seedReferences['user-demo'],
+      action: 'renewal',
+      status: 'success',
+      message: 'Subscription renewed automatically',
+      logged_at: new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+    }
+  ]);
+
+  await ensureSeedRecords('notification-templates', [
+    {
+      template_code: 'invoice_overdue',
+      name: 'Invoice Overdue Reminder',
+      channel: 'email',
+      subject: 'Reminder: Invoice {{invoice_number}} is overdue',
+      body: 'Dear {{customer_name}},\n\nOur records show invoice {{invoice_number}} is overdue. Please arrange payment at your earliest convenience.\n\nThank you.'
+    },
+    {
+      template_code: 'payment_received',
+      name: 'Payment Received Confirmation',
+      channel: 'email',
+      subject: 'Payment received - {{payment_number}}',
+      body: 'Hi {{customer_name}},\n\nThis is to confirm we received payment {{payment_number}} for {{amount}}. Thank you for your business.'
+    }
+  ]);
+
+  await ensureSeedRecords('license-keys', [
+    {
+      license_key: 'AGENTIC-ERP-DEMO-KEY',
+      status: 'active',
+      issued_to: 'Demo User',
+      issued_at: new Date(now.getFullYear(), now.getMonth() - 3, 5).toISOString(),
+      expires_at: new Date(now.getFullYear(), now.getMonth() + 9, 5).toISOString()
+    }
+  ]);
 };
 
 const startServer = async () => {
