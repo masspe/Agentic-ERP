@@ -294,8 +294,8 @@ export default function LicenseKeyManagement({ adminUser }) {
                             Send Email
                         </Button>
                     </DialogFooter>
-                </Dialog>
-            </div>
+                </DialogContent>
+            </Dialog>
         </>
     );
 }
