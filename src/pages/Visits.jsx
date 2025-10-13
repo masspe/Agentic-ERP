@@ -1,12 +1,13 @@
 
-import React, { useState, useEffect, Suspense, lazy } from "react";
+import { useState, useEffect, Suspense, lazy, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Plus, Calendar, List, Loader2 } from "lucide-react";
 import { Visit, Customer, Prospect, User } from "@/api/entities";
 import { useCompanyProfile } from "../components/contexts/CompanyProfileContext";
 import { useLocalization } from "../components/contexts/LocalizationContext";
+import { format, parseISO, isWithinInterval } from "date-fns";
 
 const VisitList = lazy(() => import("../components/crm/VisitList"));
 const VisitForm = lazy(() => import("../components/crm/VisitForm"));
@@ -20,6 +21,7 @@ export default function Visits() {
   const [customers, setCustomers] = useState([]);
   const [prospects, setProspects] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [calendarRange, setCalendarRange] = useState(null);
   const { isSubscriptionActive } = useCompanyProfile();
   const { t } = useLocalization();
 
@@ -72,6 +74,75 @@ export default function Visits() {
     setIsFormOpen(false);
     setSelectedVisit(null);
   };
+
+  const handleRangeChange = useCallback((range) => {
+    setCalendarRange(range);
+  }, []);
+
+  const filteredVisits = useMemo(() => {
+    if (!visits || visits.length === 0) {
+      return [];
+    }
+
+    const getVisitDateTime = (visit) => {
+      try {
+        const date = parseISO(visit.visit_date);
+        if (visit.visit_time) {
+          const [hours, minutes] = visit.visit_time.split(':').map(Number);
+          if (!Number.isNaN(hours) && !Number.isNaN(minutes)) {
+            date.setHours(hours, minutes, 0, 0);
+          }
+        }
+        return date;
+      } catch {
+        return null;
+      }
+    };
+
+    const withinRange = (visit) => {
+      if (!calendarRange?.start || !calendarRange?.end) {
+        return true;
+      }
+
+      try {
+        const visitDate = parseISO(visit.visit_date);
+        return isWithinInterval(visitDate, {
+          start: calendarRange.start,
+          end: calendarRange.end,
+        });
+      } catch {
+        return false;
+      }
+    };
+
+    return visits
+      .filter((visit) => visit.visit_date && withinRange(visit))
+      .sort((a, b) => {
+        const dateA = getVisitDateTime(a);
+        const dateB = getVisitDateTime(b);
+
+        if (!dateA && !dateB) return 0;
+        if (!dateA) return 1;
+        if (!dateB) return -1;
+        return dateA - dateB;
+      });
+  }, [visits, calendarRange]);
+
+  const calendarRangeLabel = useMemo(() => {
+    if (!calendarRange?.start || !calendarRange?.end) {
+      return null;
+    }
+
+    if (calendarRange.view === "day") {
+      return format(calendarRange.start, "MMMM d, yyyy");
+    }
+
+    if (calendarRange.view === "week") {
+      return `${format(calendarRange.start, "MMM d, yyyy")} - ${format(calendarRange.end, "MMM d, yyyy")}`;
+    }
+
+    return format(calendarRange.start, "MMMM yyyy");
+  }, [calendarRange]);
 
   return (
     <div className="p-6 space-y-6">
@@ -133,21 +204,30 @@ export default function Visits() {
         </CardHeader>
         <CardContent>
           <Suspense fallback={<div className="flex justify-center p-8"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>}>
-            {activeView === "list" ? (
-              <VisitList
-                visits={visits}
-                isLoading={isLoading}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-              />
-            ) : (
+            <div className={activeView === "calendar" ? "block" : "hidden"}>
               <VisitCalendar
                 visits={visits}
                 isLoading={isLoading}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
+                onRangeChange={handleRangeChange}
               />
-            )}
+            </div>
+
+            <div className={activeView === "list" ? "space-y-4" : "hidden"}>
+              {calendarRangeLabel && (
+                <div className="flex items-center gap-2 rounded-md bg-indigo-50 px-3 py-2 text-sm text-indigo-700">
+                  <Calendar className="w-4 h-4" />
+                  <span>{calendarRangeLabel}</span>
+                </div>
+              )}
+              <VisitList
+                visits={filteredVisits}
+                isLoading={isLoading}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+              />
+            </div>
           </Suspense>
         </CardContent>
       </Card>
