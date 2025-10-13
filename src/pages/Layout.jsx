@@ -58,13 +58,13 @@ import {
   SidebarTrigger } from
 
 "@/components/ui/sidebar";
-import { LocalizationProvider, useLocalization } from "./components/contexts/LocalizationContext";
-import { ToastProvider } from "./components/contexts/ToastContext";
-import { CompanyProfileProvider, useCompanyProfile } from "./components/contexts/CompanyProfileContext";
-import { Button } from "./components/ui/button";
-import BottomNavigation from "./components/mobile/BottomNavigation";
-import { SUPER_ADMIN_EMAIL, isSuperAdmin } from "./components/utils/adminConfig";
-import Logo from "./components/ui/Logo";
+import { LocalizationProvider, useLocalization } from "../components/contexts/LocalizationContext";
+import { ToastProvider } from "../components/contexts/ToastContext";
+import { CompanyProfileProvider, useCompanyProfile } from "../components/contexts/CompanyProfileContext";
+import { Button } from "../components/ui/button";
+import BottomNavigation from "../components/mobile/BottomNavigation";
+import { SUPER_ADMIN_EMAIL, isSuperAdmin } from "../components/utils/adminConfig";
+import Logo from "../components/ui/Logo";
 
 const registerServiceWorker = () => {
   if ('serviceWorker' in navigator) {
