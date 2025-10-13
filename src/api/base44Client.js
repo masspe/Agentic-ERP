@@ -218,37 +218,37 @@ const integrationsClient = {
   Core: {
     InvokeLLM: {
       async run() {
-        throw new Error('InvokeLLM integration is not implemented in the Prisma backend.');
+        throw new Error('InvokeLLM integration is not implemented in the MongoDB backend.');
       }
     },
     SendEmail: {
       async run() {
-        throw new Error('SendEmail integration is not implemented in the Prisma backend.');
+        throw new Error('SendEmail integration is not implemented in the MongoDB backend.');
       }
     },
     UploadFile: {
       async run() {
-        throw new Error('UploadFile integration is not implemented in the Prisma backend.');
+        throw new Error('UploadFile integration is not implemented in the MongoDB backend.');
       }
     },
     GenerateImage: {
       async run() {
-        throw new Error('GenerateImage integration is not implemented in the Prisma backend.');
+        throw new Error('GenerateImage integration is not implemented in the MongoDB backend.');
       }
     },
     ExtractDataFromUploadedFile: {
       async run() {
-        throw new Error('ExtractDataFromUploadedFile integration is not implemented in the Prisma backend.');
+        throw new Error('ExtractDataFromUploadedFile integration is not implemented in the MongoDB backend.');
       }
     },
     CreateFileSignedUrl: {
       async run() {
-        throw new Error('CreateFileSignedUrl integration is not implemented in the Prisma backend.');
+        throw new Error('CreateFileSignedUrl integration is not implemented in the MongoDB backend.');
       }
     },
     UploadPrivateFile: {
       async run() {
-        throw new Error('UploadPrivateFile integration is not implemented in the Prisma backend.');
+        throw new Error('UploadPrivateFile integration is not implemented in the MongoDB backend.');
       }
     }
   }
