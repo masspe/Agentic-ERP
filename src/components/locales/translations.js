@@ -316,7 +316,10 @@ export const en = {
             source_cold_call: "Cold Call",
             source_event: "Event",
             source_social_media: "Social Media",
-            source_other: "Other"
+            source_other: "Other",
+            search_placeholder: "Search prospects...",
+            no_search_results: "No prospects match your search.",
+            results_count: "Showing {count} results"
         },
         visits: {
             title: "Visit Planner",
@@ -762,7 +765,10 @@ export const fr = {
             source_cold_call: "Appel à froid",
             source_event: "Événement",
             source_social_media: "Réseaux sociaux",
-            source_other: "Autre"
+            source_other: "Autre",
+            search_placeholder: "Rechercher des prospects...",
+            no_search_results: "Aucun prospect ne correspond à votre recherche.",
+            results_count: "Affichage de {count} résultats"
         },
         visits: {
             title: "Planificateur de visites",
@@ -1208,7 +1214,10 @@ export const it = {
             source_cold_call: "Chiamata a freddo",
             source_event: "Evento",
             source_social_media: "Social media",
-            source_other: "Altro"
+            source_other: "Altro",
+            search_placeholder: "Cerca potenziali clienti...",
+            no_search_results: "Nessun potenziale cliente corrisponde alla ricerca.",
+            results_count: "Mostrando {count} risultati"
         },
         visits: {
             title: "Pianificatore Visite",
@@ -1654,7 +1663,10 @@ export const de = {
             source_cold_call: "Kaltakquise",
             source_event: "Veranstaltung",
             source_social_media: "Soziale Medien",
-            source_other: "Sonstiges"
+            source_other: "Sonstiges",
+            search_placeholder: "Interessenten durchsuchen...",
+            no_search_results: "Keine Interessenten entsprechen Ihrer Suche.",
+            results_count: "Es werden {count} Ergebnisse angezeigt"
         },
         visits: {
             title: "Besuchsplaner",
@@ -2100,7 +2112,10 @@ export const es = {
             source_cold_call: "Llamada en frío",
             source_event: "Evento",
             source_social_media: "Redes sociales",
-            source_other: "Otro"
+            source_other: "Otro",
+            search_placeholder: "Buscar prospectos...",
+            no_search_results: "Ningún prospecto coincide con tu búsqueda.",
+            results_count: "Mostrando {count} resultados"
         },
         visits: {
             title: "Planificador de Visitas",
@@ -2546,7 +2561,10 @@ export const ar = {
             source_cold_call: "مكالمة باردة",
             source_event: "حدث",
             source_social_media: "وسائل التواصل الاجتماعي",
-            source_other: "أخرى"
+            source_other: "أخرى",
+            search_placeholder: "ابحث عن العملاء المحتملين...",
+            no_search_results: "لا يوجد عملاء محتملون يطابقون بحثك.",
+            results_count: "عرض {count} من النتائج"
         },
         visits: {
             title: "مخطط الزيارات",
@@ -2992,7 +3010,10 @@ export const ur = {
             source_cold_call: "کولڈ کال",
             source_event: "تقریب",
             source_social_media: "سوشل میڈیا",
-            source_other: "دیگر"
+            source_other: "دیگر",
+            search_placeholder: "ممکنہ گاہک تلاش کریں...",
+            no_search_results: "آپ کی تلاش سے کوئی ممکنہ گاہک نہیں ملا۔",
+            results_count: "{count} نتائج دکھائے جا رہے ہیں"
         },
         visits: {
             title: "دورے کا منصوبہ ساز",
