@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -26,7 +26,7 @@ import { Prospect, Customer } from "@/api/entities";
 import { useToast } from '../contexts/ToastContext';
 import { useLocalization } from '../contexts/LocalizationContext';
 
-export default function ProspectList({ prospects, isLoading, onEdit, onDelete, onProspectConverted }) {
+export default function ProspectList({ prospects, isLoading, onEdit, onDelete, onProspectConverted, searchTerm = '' }) {
   const [isDeleting, setIsDeleting] = useState(null);
   const [isConverting, setIsConverting] = useState(null);
   const { showSuccessToast, showErrorToast } = useToast();
@@ -96,8 +96,12 @@ export default function ProspectList({ prospects, isLoading, onEdit, onDelete, o
     return (
       <div className="text-center py-12">
         <Users className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-slate-700">{t('crm.prospects.no_prospects')}</h3>
-        <p className="text-slate-500">{t('crm.prospects.add_first')}</p>
+        <h3 className="text-lg font-medium text-slate-700">
+          {searchTerm ? t('crm.prospects.no_search_results') : t('crm.prospects.no_prospects')}
+        </h3>
+        {!searchTerm && (
+          <p className="text-slate-500">{t('crm.prospects.add_first')}</p>
+        )}
       </div>
     );
   }
