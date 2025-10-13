@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Star, Zap, Crown, Calendar, Key, Loader2 } from "lucide-react";
 import { CompanyProfile } from "@/api/entities";
 import { User } from "@/api/entities";
-import { LicenseKey } from "@/api/entities/LicenseKey";
+import { LicenseKey } from "@/api/entities";
 import { SubscriptionLog } from "@/api/entities";
 import { format, add, differenceInDays } from "date-fns";
 import { useCompanyProfile } from '../contexts/CompanyProfileContext';

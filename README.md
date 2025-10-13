@@ -1,13 +1,17 @@
-# Base44 App
+# Agentic ERP
 
-
-This app was created automatically by Base44.
-It's a Vite+React app that communicates with the Base44 API.
+This project provides a Vite + React front-end paired with a lightweight Express
+API that uses Prisma and SQLite for persistence. The previous dependency on the
+Base44 platform has been replaced with a self-hosted backend so you can run the
+entire ERP demo locally.
 
 ## Running the app
 
 ```bash
 npm install
+npm run db:generate
+npm run db:push
+npm run server # starts the Express + Prisma API on http://localhost:4000
 npm run dev
 ```
 
@@ -16,5 +20,3 @@ npm run dev
 ```bash
 npm run build
 ```
-
-For more information and support, please contact Base44 support at app@base44.com.
