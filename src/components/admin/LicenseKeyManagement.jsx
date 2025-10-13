@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { LicenseKey } from '@/api/entities';
+import { LicenseKey } from '@/api/entities/LicenseKey';
 import { SubscriptionPlan } from '@/api/entities';
 import { SubscriptionLog } from '@/api/entities';
 import { SendEmail } from '@/api/integrations';
