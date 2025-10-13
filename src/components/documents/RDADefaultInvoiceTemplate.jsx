@@ -27,7 +27,8 @@ export default function RDADefaultInvoiceTemplate({ invoice, companyProfile: ext
         // Note: QR code generation relies on `invoice` prop, not `profile` state for its data.
         if (invoice && invoice.invoice_number) {
           const verificationUrl = `${window.location.origin}/verify-invoice/${invoice.invoice_number}`;
-          const QRCode = await import('qrcode');
+          const qrCodeModule = await import('qrcode');
+          const QRCode = qrCodeModule.default || qrCodeModule;
           const qrDataURL = await QRCode.toDataURL(verificationUrl, {
             width: 150,
             margin: 1,
