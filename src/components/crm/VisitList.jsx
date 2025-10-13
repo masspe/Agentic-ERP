@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -35,9 +35,12 @@ export default function VisitList({ visits, isLoading, onEdit, onDelete }) {
   const handleDelete = async (visit) => {
     setIsDeleting(visit.id);
     try {
-      await Visit.delete(visit.id);
+      if (onDelete) {
+        await onDelete(visit.id);
+      } else {
+        await Visit.delete(visit.id);
+      }
       showSuccessToast(t('crm.visits.visit_deleted'));
-      if (onDelete) onDelete(visit.id);
     } catch (error) {
       console.error('Error deleting visit:', error);
       showErrorToast(t('crm.visits.delete_error'));
