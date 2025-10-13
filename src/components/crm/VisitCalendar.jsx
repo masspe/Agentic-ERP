@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ChevronLeft, ChevronRight, Calendar, Clock, MapPin, Edit, Trash2 } from "lucide-react";
@@ -44,11 +44,32 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-export default function VisitCalendar({ visits, isLoading, onEdit, onDelete }) {
+export default function VisitCalendar({ visits, isLoading, onEdit, onDelete, onRangeChange }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState('month'); // 'day', 'week', 'month'
   const [selectedVisit, setSelectedVisit] = useState(null);
   const { t } = useLocalization();
+
+  const currentRange = useMemo(() => {
+    const start = view === 'day'
+      ? startOfDay(currentDate)
+      : view === 'week'
+        ? startOfWeek(currentDate)
+        : startOfMonth(currentDate);
+    const end = view === 'day'
+      ? endOfDay(currentDate)
+      : view === 'week'
+        ? endOfWeek(currentDate)
+        : endOfMonth(currentDate);
+
+    return { start, end, view };
+  }, [currentDate, view]);
+
+  useEffect(() => {
+    if (onRangeChange && currentRange?.start && currentRange?.end) {
+      onRangeChange(currentRange);
+    }
+  }, [currentRange, onRangeChange]);
 
   const getStatusColor = (status) => {
     const colors = {
