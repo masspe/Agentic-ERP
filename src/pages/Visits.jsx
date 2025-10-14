@@ -22,6 +22,7 @@ export default function Visits() {
   const [prospects, setProspects] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [calendarRange, setCalendarRange] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
   const { isSubscriptionActive } = useCompanyProfile();
   const { t } = useLocalization();
 
@@ -32,12 +33,19 @@ export default function Visits() {
     try {
       const user = await User.me();
       if(!user) { setIsLoading(false); return; }
+      setCurrentUser(user);
       const [visitData, customerData, prospectData] = await Promise.all([
-        Visit.filter({ created_by: user.email }, '-visit_date'),
+        Visit.list('-visit_date', 500),
         Customer.filter({ created_by: user.email }),
         Prospect.filter({ created_by: user.email })
       ]);
-      setVisits(visitData);
+      const userEmail = user.email?.toLowerCase?.();
+      const normalizedVisits = (visitData || []).filter((visit) => {
+        if (!userEmail) return true;
+        const createdBy = visit.created_by?.toLowerCase?.();
+        return !createdBy || createdBy === userEmail;
+      });
+      setVisits(normalizedVisits);
       setCustomers(customerData);
       setProspects(prospectData);
     } catch(e) { console.error(e); }
@@ -55,10 +63,19 @@ export default function Visits() {
   };
 
   const handleSave = async (data) => {
+    const payload = {
+      ...data,
+      ...(selectedVisit?.created_by
+        ? { created_by: selectedVisit.created_by }
+        : currentUser?.email
+          ? { created_by: currentUser.email }
+          : {}),
+      ...(currentUser?.email ? { updated_by: currentUser.email } : {}),
+    };
     if (selectedVisit) {
-      await Visit.update(selectedVisit.id, data);
+      await Visit.update(selectedVisit.id, payload);
     } else {
-      await Visit.create(data);
+      await Visit.create(payload);
     }
     setIsFormOpen(false);
     setSelectedVisit(null);
