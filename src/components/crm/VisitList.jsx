@@ -25,12 +25,19 @@ import {
 import { Visit } from "@/api/entities";
 import { useToast } from '../contexts/ToastContext';
 import { useLocalization } from '../contexts/LocalizationContext';
-import { format } from 'date-fns';
+import { format, parseISO, isValid } from 'date-fns';
 
 export default function VisitList({ visits, isLoading, onEdit, onDelete }) {
   const [isDeleting, setIsDeleting] = useState(null);
   const { showSuccessToast, showErrorToast } = useToast();
   const { t } = useLocalization();
+
+  const formatVisitDate = (visitDate) => {
+    if (!visitDate) return '-';
+
+    const parsedDate = parseISO(visitDate);
+    return isValid(parsedDate) ? format(parsedDate, 'MMM dd, yyyy') : '-';
+  };
 
   const handleDelete = async (visit) => {
     setIsDeleting(visit.id);
@@ -96,7 +103,7 @@ export default function VisitList({ visits, isLoading, onEdit, onDelete }) {
             <TableRow key={visit.id}>
               <TableCell className="font-medium">{visit.title}</TableCell>
               <TableCell>{visit.customer_name || visit.prospect_name || '-'}</TableCell>
-              <TableCell>{format(new Date(visit.visit_date), 'MMM dd, yyyy')}</TableCell>
+              <TableCell>{formatVisitDate(visit.visit_date)}</TableCell>
               <TableCell>{visit.visit_time || '-'}</TableCell>
               <TableCell>
                 <Badge variant="outline">{t(`crm.visits.purpose_${visit.purpose}`)}</Badge>
