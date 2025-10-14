@@ -14,6 +14,7 @@ export default function Prospects() {
   const [selectedProspect, setSelectedProspect] = useState(null);
   const [prospects, setProspects] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
   const { isSubscriptionActive } = useCompanyProfile();
   const { t } = useLocalization();
 
@@ -24,7 +25,8 @@ export default function Prospects() {
     try {
       const user = await User.me();
       if(!user) { setIsLoading(false); return; }
-      const data = await Prospect.filter({ created_by: user.email }, '-created_date');
+      setCurrentUser(user);
+      const data = await Prospect.filter({ created_by: user.email });
       setProspects(data);
     } catch(e) { console.error(e); }
     finally { setIsLoading(false); }
@@ -41,10 +43,20 @@ export default function Prospects() {
   };
 
   const handleSave = async (data) => {
+    const user = currentUser ?? await User.me();
+    const payload = {
+      ...data,
+      ...(selectedProspect?.created_by
+        ? { created_by: selectedProspect.created_by }
+        : user?.email
+          ? { created_by: user.email }
+          : {})
+    };
+
     if (selectedProspect) {
-      await Prospect.update(selectedProspect.id, data);
+      await Prospect.update(selectedProspect.id, payload);
     } else {
-      await Prospect.create(data);
+      await Prospect.create(payload);
     }
     setIsFormOpen(false);
     setSelectedProspect(null);
