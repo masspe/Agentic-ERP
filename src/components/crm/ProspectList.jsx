@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, Edit, Trash2, UserPlus } from "lucide-react";
+import { Users, Edit, Trash2, UserPlus, Search } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -25,12 +26,41 @@ import {
 import { Prospect, Customer } from "@/api/entities";
 import { useToast } from '../contexts/ToastContext';
 import { useLocalization } from '../contexts/LocalizationContext';
+import { useDebounce, useOptimizedFilter } from '../hooks/useOptimizedData';
 
-export default function ProspectList({ prospects, isLoading, onEdit, onDelete, onProspectConverted, searchTerm = '' }) {
+export default function ProspectList({ prospects, isLoading, onEdit, onDelete, onProspectConverted }) {
   const [isDeleting, setIsDeleting] = useState(null);
   const [isConverting, setIsConverting] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
   const { showSuccessToast, showErrorToast } = useToast();
   const { t } = useLocalization();
+  const debouncedSearch = useDebounce(searchTerm, 300);
+
+  const filteredProspects = useOptimizedFilter(prospects,
+    useMemo(() => {
+      if (!debouncedSearch) return null;
+      const search = debouncedSearch.toLowerCase();
+
+      return (prospect) => {
+        const haystacks = [
+          prospect.company_name,
+          prospect.contact_person,
+          prospect.email,
+          prospect.phone,
+          prospect.status,
+          prospect.city,
+          prospect.country
+        ];
+
+        return haystacks.some(value =>
+          typeof value === 'string' && value.toLowerCase().includes(search)
+        );
+      };
+    }, [debouncedSearch])
+  );
+
+  const displayProspects = filteredProspects ?? [];
+  const isSearching = Boolean(debouncedSearch && debouncedSearch.trim().length > 0);
 
   const handleDelete = async (prospect) => {
     setIsDeleting(prospect.id);
@@ -92,104 +122,126 @@ export default function ProspectList({ prospects, isLoading, onEdit, onDelete, o
     );
   }
 
-  if (prospects.length === 0) {
+  if (displayProspects.length === 0) {
     return (
-      <div className="text-center py-12">
-        <Users className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-        <h3 className="text-lg font-medium text-slate-700">
-          {searchTerm ? t('crm.prospects.no_search_results') : t('crm.prospects.no_prospects')}
-        </h3>
-        {!searchTerm && (
-          <p className="text-slate-500">{t('crm.prospects.add_first')}</p>
-        )}
+      <div className="space-y-6">
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+          <Input
+            placeholder={`${t('common.search')}...`}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <div className="text-center py-12">
+          <Users className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-slate-700">
+            {isSearching ? t('crm.prospects.no_search_results') : t('crm.prospects.no_prospects')}
+          </h3>
+          {!isSearching && (
+            <p className="text-slate-500">{t('crm.prospects.add_first')}</p>
+          )}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>{t('crm.prospects.company_name')}</TableHead>
-            <TableHead>{t('crm.prospects.contact_person')}</TableHead>
-            <TableHead>{t('crm.prospects.email')}</TableHead>
-            <TableHead>{t('crm.prospects.phone')}</TableHead>
-            <TableHead>{t('crm.prospects.status')}</TableHead>
-            <TableHead>{t('crm.prospects.expected_revenue')}</TableHead>
-            <TableHead>{t('common.actions')}</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {prospects.map((prospect) => (
-            <TableRow key={prospect.id}>
-              <TableCell className="font-medium">{prospect.company_name}</TableCell>
-              <TableCell>{prospect.contact_person}</TableCell>
-              <TableCell>{prospect.email || '-'}</TableCell>
-              <TableCell>{prospect.phone || '-'}</TableCell>
-              <TableCell>
-                <Badge className={getStatusColor(prospect.status)}>
-                  {t(`crm.prospects.status_${prospect.status}`)}
-                </Badge>
-              </TableCell>
-              <TableCell>AED {prospect.expected_revenue?.toFixed(2) || '0.00'}</TableCell>
-              <TableCell>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onEdit(prospect)}
-                  >
-                    <Edit className="w-4 h-4 mr-1" />
-                    {t('common.edit')}
-                  </Button>
-                  
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-green-600 hover:text-green-700 hover:bg-green-50"
-                    onClick={() => handleConvertToCustomer(prospect)}
-                    disabled={isConverting === prospect.id}
-                  >
-                    <UserPlus className="w-4 h-4 mr-1" />
-                    {t('crm.prospects.convert')}
-                  </Button>
-                  
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                        disabled={isDeleting === prospect.id}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>{t('crm.prospects.delete_prospect')}</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          {t('crm.prospects.delete_confirm')}
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-                        <AlertDialogAction 
-                          onClick={() => handleDelete(prospect)}
-                          className="bg-red-600 hover:bg-red-700"
-                        >
-                          {t('common.delete')}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                </div>
-              </TableCell>
+    <div className="space-y-4">
+      <div className="relative max-w-md">
+        <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+        <Input
+          placeholder={`${t('common.search')}...`}
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t('crm.prospects.company_name')}</TableHead>
+              <TableHead>{t('crm.prospects.contact_person')}</TableHead>
+              <TableHead>{t('crm.prospects.email')}</TableHead>
+              <TableHead>{t('crm.prospects.phone')}</TableHead>
+              <TableHead>{t('crm.prospects.status')}</TableHead>
+              <TableHead>{t('crm.prospects.expected_revenue')}</TableHead>
+              <TableHead>{t('common.actions')}</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {displayProspects.map((prospect) => (
+              <TableRow key={prospect.id}>
+                <TableCell className="font-medium">{prospect.company_name}</TableCell>
+                <TableCell>{prospect.contact_person}</TableCell>
+                <TableCell>{prospect.email || '-'}</TableCell>
+                <TableCell>{prospect.phone || '-'}</TableCell>
+                <TableCell>
+                  <Badge className={getStatusColor(prospect.status)}>
+                    {t(`crm.prospects.status_${prospect.status}`)}
+                  </Badge>
+                </TableCell>
+                <TableCell>AED {prospect.expected_revenue?.toFixed(2) || '0.00'}</TableCell>
+                <TableCell>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onEdit(prospect)}
+                    >
+                      <Edit className="w-4 h-4 mr-1" />
+                      {t('common.edit')}
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                      onClick={() => handleConvertToCustomer(prospect)}
+                      disabled={isConverting === prospect.id || prospect.status === 'won'}
+                    >
+                      <UserPlus className="w-4 h-4 mr-1" />
+                      {t('crm.prospects.convert')}
+                    </Button>
+
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          disabled={isDeleting === prospect.id}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>{t('crm.prospects.delete_prospect')}</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            {t('crm.prospects.delete_confirm')}
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => handleDelete(prospect)}
+                            className="bg-red-600 hover:bg-red-700"
+                          >
+                            {t('common.delete')}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }

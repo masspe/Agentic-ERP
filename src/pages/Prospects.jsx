@@ -1,11 +1,10 @@
-import { useState, useEffect, Suspense, lazy, useMemo } from "react";
+import { useState, useEffect, Suspense, lazy } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Users, Loader2 } from "lucide-react";
 import { Prospect, User } from "@/api/entities";
 import { useCompanyProfile } from "../components/contexts/CompanyProfileContext";
 import { useLocalization } from "../components/contexts/LocalizationContext";
-import { Input } from "@/components/ui/input";
 
 const ProspectList = lazy(() => import("../components/crm/ProspectList"));
 const ProspectForm = lazy(() => import("../components/crm/ProspectForm"));
@@ -15,7 +14,6 @@ export default function Prospects() {
   const [selectedProspect, setSelectedProspect] = useState(null);
   const [prospects, setProspects] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
   const { isSubscriptionActive } = useCompanyProfile();
   const { t } = useLocalization();
 
@@ -63,31 +61,6 @@ export default function Prospects() {
     setSelectedProspect(null);
   };
 
-  const filteredProspects = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
-
-    if (!term) {
-      return prospects;
-    }
-
-    return prospects.filter((prospect) => {
-      const valuesToSearch = [
-        prospect.company_name,
-        prospect.contact_person,
-        prospect.email,
-        prospect.phone,
-        prospect.status,
-        prospect.industry,
-        prospect.city,
-        prospect.country
-      ];
-
-      return valuesToSearch.some((value) =>
-        value?.toString().toLowerCase().includes(term)
-      );
-    });
-  }, [prospects, searchTerm]);
-
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -117,39 +90,19 @@ export default function Prospects() {
 
       <Card>
         <CardHeader>
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <Users className="w-5 h-5"/>
-              {t('crm.prospects.all_prospects')}
-            </CardTitle>
-            <div className="flex flex-col gap-2 md:flex-row md:items-center md:gap-3 w-full md:w-auto">
-              <Input
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder={t('crm.prospects.search_placeholder')}
-                className="md:w-72"
-                type="search"
-              />
-              <p className="text-sm text-slate-500 md:text-right">
-                {(() => {
-                  const label = t('crm.prospects.results_count');
-                  return label.includes('{count}')
-                    ? label.replace('{count}', filteredProspects.length)
-                    : `${label}: ${filteredProspects.length}`;
-                })()}
-              </p>
-            </div>
-          </div>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="w-5 h-5"/>
+            {t('crm.prospects.all_prospects')}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <Suspense fallback={<div className="flex justify-center p-8"><Loader2 className="w-8 h-8 animate-spin" /></div>}>
             <ProspectList
-              prospects={filteredProspects}
+              prospects={prospects}
               isLoading={isLoading}
               onEdit={handleEdit}
               onDelete={handleDelete}
               onProspectConverted={loadProspects}
-              searchTerm={searchTerm.trim()}
             />
           </Suspense>
         </CardContent>
