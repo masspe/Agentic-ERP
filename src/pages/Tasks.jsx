@@ -16,6 +16,7 @@ export default function Tasks() {
   const [customers, setCustomers] = useState([]);
   const [prospects, setProspects] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
   const { isSubscriptionActive } = useCompanyProfile();
   const { t } = useLocalization();
 
@@ -26,12 +27,20 @@ export default function Tasks() {
     try {
       const user = await User.me();
       if(!user) { setIsLoading(false); return; }
+      setCurrentUser(user);
       const [taskData, customerData, prospectData] = await Promise.all([
-        Task.filter({ created_by: user.email }, '-due_date'),
+        Task.list('-due_date', 500),
         Customer.filter({ created_by: user.email }),
         Prospect.filter({ created_by: user.email })
       ]);
-      setTasks(taskData);
+      const userEmail = user.email?.toLowerCase?.();
+      const normalizedTasks = (taskData || []).filter(task => {
+        if (!userEmail) return true;
+        const createdBy = task.created_by?.toLowerCase?.();
+        const assignedTo = task.assigned_to?.toLowerCase?.();
+        return !createdBy || createdBy === userEmail || assignedTo === userEmail;
+      });
+      setTasks(normalizedTasks);
       setCustomers(customerData);
       setProspects(prospectData);
     } catch(e) { console.error(e); }
@@ -49,10 +58,16 @@ export default function Tasks() {
   };
 
   const handleSave = async (data) => {
+    const payload = {
+      ...data,
+      ...(selectedTask?.created_by
+        ? { created_by: selectedTask.created_by }
+        : currentUser?.email ? { created_by: currentUser.email } : {})
+    };
     if (selectedTask) {
-      await Task.update(selectedTask.id, data);
+      await Task.update(selectedTask.id, payload);
     } else {
-      await Task.create(data);
+      await Task.create(payload);
     }
     setIsFormOpen(false);
     setSelectedTask(null);
